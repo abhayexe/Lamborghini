@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>lamborghini Ferzor</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				margin: 0;
+				background-color: #000000;
+				color: #fff;
+				font-family: Monospace;
+				font-size: 13px;
+				line-height: 24px;
+				overscroll-behavior: none;
+                overflow: hidden;
+			}
+			/* #container{
+				display: flex;
+				justify-content:center;
+				align-items: center;
+				font-size: 40px;
+				font-family: Arial, Helvetica, sans-serif;
+				color: blueviolet;
+				font-style: italic;
+				
+			} */
+
+		</style>
+	</head>
+
+	<body>
+		<div id="container"</div>
+		
+		</video>
+
+		<script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+					"three/addons/": "https://unpkg.com/three@0.154.0/examples/jsm/"
+				}
+			}
+		</script>
+		<script src="https://cdn.jsdelivr.net/npm/three@0.148.0/examples/js/loaders/RGBELoader.js"></script>
+
+
+		<!-- <script src="three/examples/jsm/postprocessing/OutlinePass.js"></script> -->
+        
+
+		<script type="module">
+			import * as THREE from 'three';
+			import Stats from 'three/addons/libs/stats.module.js';
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+			import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+			import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+			import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+			import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+			import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+			import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+			import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+            import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+			// Import Reflector from THREE.js examples
+			//import { Reflector } from 'https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/objects/Reflector.js';
+
+			// import { OutlinePass } from '/OutlinePass.js';
+			import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+            import { Water as WaterShader } from 'three/addons/objects/Water.js';
+			//import { color, pass, reflector, normalWorld, texture, uv, screenUV, gaussianBlur } from 'three/tsl';
+
+			//import { GlitchPass } from 'three/examples/jsm/postprocessing/GlitchPass.js';
+			//import { SSAOPass } from './node_modules/three/examples/jsm/postprocessing/SSAOPass.js';
+			//import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+            // import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+            // import { ColorCorrectionShader } from 'three/examples/jsm/shaders/ColorCorrectionShader.js';
+
+			let composer, character, mixer, walkAction;
+			let isFreeCameraMode = false;
+			const clock = new THREE.Clock();
+			const container = document.getElementById('container');
+			const keysPressed = {};
+			const moveSpeed = 0.035;
+			const rotateSpeed = 0.025;
+			const cameraOffset = new THREE.Vector3(0, 1, -4);
+
+            let cameraRotationX = 0; // Horizontal rotation
+			let cameraRotationY = 0; // Vertical rotation
+			const mouseSensitivity = 0.002;
+			const verticalLimit = Math.PI / 2; // 90 degrees limit for vertical rotation
+			let currentZoom = 4; // Initial zoom distance
+			const minZoom = 2; // Minimum zoom distance
+			const maxZoom = 10; // Maximum zoom distance
+			const zoomSpeed = 0.5; // Zoom sensitivity
+
+
+			// Initialize stats
+			//const stats = new Stats();
+			//container.appendChild(stats.dom);
+
+			// Initialize renderer
+			const renderer = new THREE.WebGLRenderer({ 
+				antialias: true,
+				powerPreference: "high-performance",
+			});
+			renderer.setPixelRatio(window.devicePixelRatio*1);
+			renderer.setSize(window.innerWidth*1, window.innerHeight*1);
+			renderer.shadowMap.enabled = true;
+			renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+			renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			renderer.toneMappingExposure = 1;
+			container.appendChild(renderer.domElement);
+
+			// Initialize scene
+			const pmremGenerator = new THREE.PMREMGenerator(renderer);
+			const scene = new THREE.Scene();
+			scene.background = new THREE.Color(0x000000);
+            // Create a large sphere for the skybox
+            const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+            // Flip the geometry inside out so we can see the texture from inside
+            skyGeometry.scale(-1, 1, 1);
+
+            // Load the sky texture
+            const textureLoader = new THREE.TextureLoader();
+            const skyTexture = textureLoader.load('textures/buildings.png', function(texture) {
+                // Optional: adjust texture settings if needed
+                texture.wrapS = THREE.ClampToEdgeWrapping;
+                texture.wrapT = THREE.ClampToEdgeWrapping;
+                texture.minFilter = THREE.LinearFilter;
+            });
+
+            // Create material with the sky texture
+            const skyMaterial = new THREE.MeshBasicMaterial({
+                map: skyTexture,
+                side: THREE.frontSide, // Render the inside of the sphere
+                fog: false // Disable fog for the sky
+            });
+
+            // Create the sky mesh
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            //scene.add(sky);
+            scene.fog = new THREE.Fog( 0x2ba2e2, 10, 350 );//deecf8
+
+			//scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+            // scene.environment.mapping = THREE.EquirectangularReflectionMapping;
+            // scene.environmentIntensity = 0.015;
+			//renderer.toneMapping = THREE.CineonToneMapping;
+            //renderer.toneMappingExposure = .85; // Adjust this value (lower = darker, higher = brighter)
+
+
+			// Initialize camera
+			const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 1000);
+			camera.position.set(5, 2, 8);
+
+			// Initialize orbit controls for free camera mode
+			const orbitControls = new OrbitControls(camera, renderer.domElement);
+			orbitControls.target.set(0, 0.5, 0);
+			orbitControls.enableDamping = true;
+			orbitControls.dampingFactor = 0.01;
+			orbitControls.mouseButtons = {
+				RIGHT: THREE.MOUSE.ROTATE,
+				MIDDLE: THREE.MOUSE.DOLLY,
+				LEFT: null
+			};
+			orbitControls.enabled = false;
+
+			// Add lighting
+			const directionalLight = new THREE.DirectionalLight(0xf5f3ff, 1.3);
+			directionalLight.position.set(50, 200, 75); // Increased height and distance for better coverage
+			directionalLight.castShadow = true;
+			const m = 1.5;
+			// Increase shadow map resolution significantly
+			directionalLight.shadow.mapSize.width = 14096*m;  // Increased from 1024*3
+			directionalLight.shadow.mapSize.height = 14096*m; // Increased from 1024*3
+
+			// Adjust shadow camera frustum to cover the entire town
+			directionalLight.shadow.camera.near = 1;
+			directionalLight.shadow.camera.far = 300;     // Increased far plane
+			directionalLight.shadow.camera.left = -500;    // Increased left bound
+			directionalLight.shadow.camera.right = 500;    // Increased right bound
+			directionalLight.shadow.camera.top = 500;      // Increased top bound
+			directionalLight.shadow.camera.bottom = -500;  // Increased bottom bound
+
+			// Improve shadow quality
+			directionalLight.shadow.bias = -0.0001;        // Reduce shadow acne
+			directionalLight.shadow.normalBias = 0.05;     // Reduce shadow normal bias artifacts
+			directionalLight.shadow.radius = 0;          // Slightly blur shadow edges
+
+			scene.add(directionalLight);
+
+            const ambientLight = new THREE.AmbientLight(0xfffced, .3); // Color and intensity
+            scene.add(ambientLight);
+
+            
+
+			//bad: 13, 19, 10, 9
+            //mid: 7, 6, 4', 3', 2'
+            //best: 18, 12', 8, 5
+            //base: 1
+			const dracoLoader = new DRACOLoader();
+			dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+                const loader2 = new GLTFLoader();
+				loader2.setDRACOLoader(dracoLoader);
+
+				loader2.load('models/gltf/maclaren18.glb', function (gltf) {
+				const model = gltf.scene;
+				model.position.set(0, -1, 0);
+				model.scale.set(1.01, 1.01, 1.01);
+				//model.scale.setScalar(200); //maclaren15, 9. 4, 3
+                //model.scale.setScalar(0.1); //2
+				//model.scale.setScalar(0.03); //maclaren12,17
+                
+
+                //lamborghini ferzor 18
+				scene.add(model);
+
+				model.traverse((child) => {
+					if (child.isMesh) {
+						child.castShadow = true;
+						child.receiveShadow = true;
+
+						const physicalMaterial = new THREE.MeshPhysicalMaterial({
+							//color: 0x587300,
+							map: child.material.map,
+							normalMap: child.material.normalMap,
+							metalness: .5,
+							roughness: 0,
+							//transmission: 0.1,
+							opacity: 1,
+							//wireframe: true,
+							// transparent: true,
+							// ior: 1.5,
+							// thickness: 0.5,
+							// clearcoatRoughness: 0.1,
+                            // emissive: 0xffffff,
+                            //emissiveIntensity: .5,
+							// envMap: null,
+							//envMapIntensity: 100.0
+						});
+
+						//child.material = physicalMaterial;
+						child.layers.enable(1);
+					}
+				});
+			});
+			const loader = new GLTFLoader();
+			loader.setDRACOLoader(dracoLoader);
+			const textureLoader3 = new THREE.TextureLoader();
+			textureLoader3.load('textures/buildings.png', (texture) => {
+				texture.mapping = THREE.EquirectangularReflectionMapping; // Set texture mapping
+
+				scene.environment = texture; // Use the image as the environment map
+				//scene.background = texture; // Optional: use the image as the scene background
+
+				// Load the GLTF model
+				loader.load('models/gltf/maclaren18.glb', function (gltf) {
+					const model = gltf.scene;
+					model.position.set(0, -1, 1);
+					model.scale.set(1.01, 1.01, 1.01);
+					//scene.add(model);
+
+					model.traverse((child) => {
+						if (child.isMesh) {
+							child.castShadow = true;
+							child.receiveShadow = true;
+
+							const physicalMaterial = new THREE.MeshStandardMaterial({
+								//color: 0x587300,
+								// emissive: 0xffffff,
+                            	// emissiveIntensity: 30,
+								map: child.material.map,
+								normalMap: child.material.normalMap,
+								metalness: 0.3,
+								roughness: 0.3,
+								envMap: scene.environment,
+								envMapIntensity: 0.7, 
+								// opacity: 1,
+								// clearcoat: 1,
+								// clearcoatRoughness: 0.1
+							});
+
+							child.material = physicalMaterial;
+							child.layers.disable(1);
+						}
+					});
+				});
+			});
+
+			// Create a ground plane with real-time reflection
+// const planeGeometry = new THREE.PlaneGeometry(10, 10);
+// const reflector = new THREE.Reflector(planeGeometry, {
+//     clipBias: 0.003,
+//     textureWidth: window.innerWidth * window.devicePixelRatio,
+//     textureHeight: window.innerHeight * window.devicePixelRatio,
+//     color: 0x889999,  // Optional: color tint
+// });
+// reflector.position.set(0, -1, 0); // Position it on the ground
+// reflector.rotation.x = -Math.PI / 2; // Rotate to face upwards (horizontal surface)
+// scene.add(reflector);
+
+
+
+
+
+
+				
+// Add loading progress callback
+// (progress) => {
+//     console.log('Loading progress: ', (progress.loaded / progress.total * 100) + '%');
+// },
+// // Add error callback
+// (error) => {
+//     console.error('Error loading model:', error);
+// });
+// 			//water
+			// const puddleShape = new THREE.Shape();
+			// const x = 0, y = 0,n = 0.3;
+            // puddleShape.moveTo(x, y);
+            // puddleShape.bezierCurveTo(x - 5, y + 5, x - 10, y + 10, x, y + 15); // Top left curve
+            // puddleShape.bezierCurveTo(x + 10, y + 20, x + 20, y + 10, x + 15, y); // Top right curve
+            // puddleShape.bezierCurveTo(x + 25, y - 5, x + 15, y - 10, x + 10, y - 5); // Bottom right
+            // puddleShape.bezierCurveTo(x, y - 10, x - 5, y - 5, x, y);
+			// let water;
+			// const waterGeometry = new THREE.ShapeGeometry(puddleShape, 100);
+			// const textureWidth = 512;
+			// const textureHeight = 512;
+
+			// // Create a render target for refraction
+			// const refractionRenderTarget = new THREE.WebGLRenderTarget(
+			// 	window.innerWidth * 0.5, 
+			// 	window.innerHeight * 0.5
+			// );
+
+			// water = new WaterShader(waterGeometry, {
+			// 	textureWidth: textureWidth,
+			// 	textureHeight: textureHeight,
+			// 	waterNormals: new THREE.TextureLoader().load('textures/waternormals.jpg', function(texture) {
+			// 		texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+			// 	}),
+			// 	waterColor: 0xffffff,
+			// 	distortionScale: 3.0,  // Increased distortion
+			// 	fog: scene.fog !== undefined,
+			// 	alpha: 0.8,
+			// 	refractionRatio: 0.92,  // Water refraction ratio
+			// 	clipBias: 0.003,
+			// 	refractionTexture: refractionRenderTarget.texture
+			// });
+
+			// water.rotation.x = -Math.PI / 2;
+			// water.position.y = -0.95;
+			// water.position.x = -20;
+			// water.position.z = -10;
+
+			// // Enable transparency and refraction
+			// water.material.transparent = true;
+			// water.material.opacity = 0.8;
+			// water.material.premultipliedAlpha = true;
+			// water.material.side = THREE.DoubleSide;
+
+			// // Enhance volumetric appearance
+			// water.material.shininess = 100;
+			// water.material.refractionRatio = 0.92;
+			// water.material.envMapIntensity = 1.5;
+
+
+
+			// // Add custom uniforms for enhanced refraction
+			// water.material.onBeforeCompile = (shader) => {
+			// 	shader.uniforms.refractionStrength = { value: 10.02 };
+			// 	shader.uniforms.volumeDepth = { value: 20.0 };
+				
+			// 	// Add custom vertex shader code for refraction
+			// 	shader.vertexShader = shader.vertexShader.replace(
+			// 		'#include <common>',
+			// 		`
+			// 		#include <common>
+			// 		varying vec3 vWorldPosition;
+			// 		varying vec3 vViewPosition;
+			// 		`
+			// 	);
+
+			// 	// Add fragment shader modifications for volumetric effect
+			// 	shader.fragmentShader = shader.fragmentShader.replace(
+			// 		'#include <common>',
+			// 		`
+			// 		#include <common>
+			// 		uniform float refractionStrength;
+			// 		uniform float volumeDepth;
+			// 		varying vec3 vWorldPosition;
+			// 		varying vec3 vViewPosition;
+
+			// 		vec2 getRefractionOffset(vec3 viewNormal, float depth) {
+			// 			return viewNormal.xy * (refractionStrength * depth);
+			// 		}
+			// 		`
+			// 	);
+
+			// 	// Modify the main fragment shader section
+			// 	shader.fragmentShader = shader.fragmentShader.replace(
+			// 		'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
+			// 		`
+			// 		vec3 viewNormal = normalize(normal);
+			// 		float depth = length(vViewPosition) * volumeDepth;
+			// 		vec2 refrOffset = getRefractionOffset(viewNormal, depth);
+					
+			// 		vec4 refractedColor = texture2D(refractionTexture, 
+			// 			vUv + refrOffset);
+					
+			// 		vec3 finalColor = mix(refractedColor.rgb, outgoingLight, 0.5);
+			// 		gl_FragColor = vec4(finalColor, diffuseColor.a);
+			// 		`
+			// 	);
+			// };
+
+
+
+			// //scene.add(water);
+
+			// // Add this to your render loop
+			// function render() {
+			// 	// First render the scene to the refraction texture
+			// 	const currentRenderTarget = renderer.getRenderTarget();
+			// 	const currentXrEnabled = renderer.xr.enabled;
+			// 	const currentShadowAutoUpdate = renderer.shadowMap.autoUpdate;
+
+			// 	renderer.xr.enabled = false;
+			// 	renderer.shadowMap.autoUpdate = false;
+
+			// 	water.visible = false;
+			// 	renderer.setRenderTarget(refractionRenderTarget);
+			// 	renderer.render(scene, camera);
+			// 	water.visible = true;
+
+			// 	renderer.setRenderTarget(currentRenderTarget);
+			// 	renderer.xr.enabled = currentXrEnabled;
+			// 	renderer.shadowMap.autoUpdate = currentShadowAutoUpdate;
+
+			// 	// Then render the main scene
+			// 	renderer.render(scene, camera);
+			// }
+
+		
+
+
+
+			
+
+
+			//Load character and animation
+			const fbxLoader = new FBXLoader();
+			fbxLoader.load('models/fbx/source/Car.fbx', function (fbx) {
+				character = fbx;
+				character.scale.setScalar(0.013);
+				character.position.set(0, -1, 0);
+
+				character.traverse((child) => {
+					if (child.isMesh) {
+						child.castShadow = true;
+						child.receiveShadow = true;
+					}
+				});
+
+				// scene.add(character);
+
+				// mixer = new THREE.AnimationMixer(character);
+				// walkAction = mixer.clipAction(character.animations[0]);
+				// walkAction.play();
+				
+				animate();
+			});
+			// Assuming you've already set up the scene, renderer, and camera
+//bloom
+			
+// Load the HDRI environment texture
+// const texture = textureLoader.load('textures/buildings.png');
+//         texture.mapping = THREE.EquirectangularReflectionMapping;  // Use the texture as an equirectangular map
+
+//         scene.environment = texture;  // Set it as the environment for reflections
+
+//         // Load the FBX model
+//         const fbxLoader = new FBXLoader();
+//         fbxLoader.load('models/fbx/source/Car.fbx', function (fbx) {
+//             const character = fbx;
+//             character.scale.setScalar(0.0013);
+//             character.position.set(0, -1, 0);
+
+//             character.traverse((child) => {
+//                 if (child.isMesh) {
+//                     child.castShadow = true;
+//                     child.receiveShadow = true;
+
+//                     // Apply the reflection map to the material
+//                     child.material.envMap = texture;
+//                     child.material.envMapIntensity = 1;  // Adjust reflection intensity as needed
+//                     child.material.needsUpdate = true;   // Ensure the material updates
+//                 }
+//             });
+
+//             scene.add(character);
+
+//             const mixer = new THREE.AnimationMixer(character);
+//             const walkAction = mixer.clipAction(character.animations[0]);
+//             walkAction.play();
+
+//             animate();
+//         });
+
+
+            document.addEventListener('mousemove', (event) => {
+				if (!isFreeCameraMode) {
+					const mouseX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+					const mouseY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+					
+					cameraRotationX -= mouseX * mouseSensitivity;
+					cameraRotationY += mouseY * mouseSensitivity;
+					
+					// Clamp vertical rotation to prevent camera flipping
+					cameraRotationY = Math.max(-verticalLimit, Math.min(verticalLimit, cameraRotationY));
+				}
+			});
+
+			// Add mouse wheel listener for zoom
+			document.addEventListener('wheel', (event) => {
+				if (!isFreeCameraMode) {
+					const zoomDelta = Math.sign(event.deltaY) * zoomSpeed;
+					currentZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom + zoomDelta));
+				}
+			});
+
+            // Add pointer lock API
+            container.addEventListener('click', () => {
+                if (!isFreeCameraMode) {
+                    container.requestPointerLock = container.requestPointerLock ||
+                                                container.mozRequestPointerLock ||
+                                                container.webkitRequestPointerLock;
+                    container.requestPointerLock();
+                }
+            });
+
+			// Handle keyboard input
+			// document.addEventListener('keydown', (event) => {
+			// 	keysPressed[event.key.toLowerCase()] = true;
+				
+			// 	// Toggle camera mode with 'C' key
+			// 	if (event.key.toLowerCase() === 'c') {
+			// 		isFreeCameraMode = !isFreeCameraMode;
+			// 		orbitControls.enabled = isFreeCameraMode;
+					
+			// 		if (isFreeCameraMode) {
+            //             document.exitPointerLock();
+            //             orbitControls.target.copy(character.position);
+            //         } else {
+            //             container.requestPointerLock();
+            //         }
+			// 	}
+			// });
+
+			document.addEventListener('keyup', (event) => {
+				keysPressed[event.key.toLowerCase()] = false;
+			});
+
+			// Character movement and camera control
+			function updateCharacter(deltaTime) {
+				if (!character) return;
+
+				let moving = false;
+				const characterSpeed = moveSpeed * deltaTime * 100;
+				const rotationSpeed = rotateSpeed * deltaTime * 100;
+                
+				// Get character's forward direction
+				const forward = new THREE.Vector3(0, 0, 1);
+				forward.applyQuaternion(character.quaternion);
+
+				// Movement
+				if (keysPressed['w']) {
+					character.position.add(forward.multiplyScalar(characterSpeed));
+					moving = true;
+				}
+				if (keysPressed['s']) {
+					character.position.add(forward.multiplyScalar(-characterSpeed));
+					moving = true;
+				}
+
+				// Rotation
+				// if (keysPressed['a'] || keysPressed['d']) {
+                //     const right = new THREE.Vector3(1, 0, 0);
+                //     right.applyQuaternion(character.quaternion);
+                //     const strafeDirection = keysPressed['a'] ? 1 : -1;
+                //     character.position.add(right.multiplyScalar(characterSpeed * strafeDirection));
+                //     moving = true;
+                // }
+                if (keysPressed['a']) {
+					character.rotation.y += rotationSpeed;
+					moving = true;
+				}
+				if (keysPressed['d']) {
+					character.rotation.y -= rotationSpeed;
+					moving = true;
+				}
+
+
+				// Update animation
+				if (moving && walkAction) {
+					walkAction.paused = false;
+				} else if (walkAction) {
+					walkAction.paused = true;
+				}
+
+				// Update camera position only in follow mode
+				if (!isFreeCameraMode) {
+					// Calculate camera position using spherical coordinates
+					const idealOffset = new THREE.Vector3(
+						Math.sin(cameraRotationX) * Math.cos(cameraRotationY),
+						Math.sin(cameraRotationY),
+						Math.cos(cameraRotationX) * Math.cos(cameraRotationY)
+					);
+					
+					// Apply zoom
+					idealOffset.multiplyScalar(currentZoom);
+					
+					// Add height offset to keep camera slightly above ground
+					idealOffset.y += 1;
+					
+					// Add character position
+					idealOffset.add(character.position);
+					
+					// Update camera position with smooth interpolation
+					camera.position.lerp(idealOffset, 0.1);
+					
+					// Make camera look at character's head level
+					camera.lookAt(character.position.clone().add(new THREE.Vector3(0, 1, 0)));
+				}
+			}
+			document.addEventListener('keydown', (event) => {
+				keysPressed[event.key.toLowerCase()] = true;
+				
+				if (event.key.toLowerCase() === 'c') {
+					isFreeCameraMode = !isFreeCameraMode;
+					orbitControls.enabled = isFreeCameraMode;
+					
+					if (isFreeCameraMode) {
+						document.exitPointerLock();
+						orbitControls.target.copy(character.position);
+					} else {
+						container.requestPointerLock();
+					}
+				}
+			});
+
+			// Post processing
+			// const renderScene = new RenderPass(scene, camera);
+			// const bloomPass = new UnrealBloomPass(
+			// 	new THREE.Vector2(window.innerWidth, window.innerHeight),
+			// 	//1.5, 0.4, 0.85 
+			// );
+			// bloomPass.threshold = .62;
+			// bloomPass.strength = 0.31;
+			// bloomPass.radius = 0.5;// Increase radius to spread bloom effect
+
+            const bokehPass = new BokehPass( scene, camera, {
+				focus: -0.050,
+				aperture: -0.00025,
+				maxblur: 0.003,
+				width: window.innerWidth,
+				height: window.innerHeight
+			} );
+            const renderScene = new RenderPass(scene, camera);
+			const bloomPass = new UnrealBloomPass(
+				new THREE.Vector2(window.innerWidth, window.innerHeight),
+				//1.5, 0.4, 0.85 
+			);
+			bloomPass.threshold = 0.35;
+			bloomPass.strength =1.90;//0.25
+            //bloomPass.strength =0.20;//0.25
+			bloomPass.radius = 0.4;//0.8
+			const bloomLayer = new THREE.Layers();
+			bloomLayer.set(1);
+
+			// Render the scene without bloom
+			const darkMaterial = new THREE.MeshBasicMaterial({ color: 'black' });
+			const materials = {};
+
+			scene.traverse((obj) => {
+			if (obj.isMesh && bloomLayer.test(obj.layers)) {
+				materials[obj.uuid] = obj.material;
+				obj.material = darkMaterial;
+			}
+			});
+
+			bloomPass.renderToScreen = true;
+
+			composer = new EffectComposer(renderer);
+			composer.addPass(renderScene);
+			//const godRaysPass = new THREE.ShaderPass(THREE.GodRaysShader);
+			//composer.addPass(godRaysPass);
+			
+
+            //composer.addPass(bokehPass);
+            composer.addPass(bloomPass);
+
+			// Handle window resize
+			window.onresize = function () {
+				const width = window.innerWidth;
+				const height = window.innerHeight;
+
+				camera.aspect = width / height;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(width, height);
+				composer.setSize(width, height);
+			};
+
+			// Animation loop
+			function animate() {
+				requestAnimationFrame(animate);
+
+				const deltaTime = clock.getDelta();
+				//water.material.uniforms.time.value += deltaTime;
+
+				const displacementSpeed = 0.5; // adjust for speed of displacement
+				const displacementAmount = 0.5; // adjust for how much the water moves
+				//water.position.x = Math.sin(clock.elapsedTime * displacementSpeed) * displacementAmount;
+				// sky.rotation.x = Math.sin(clock.elapsedTime * displacementSpeed) * displacementAmount;
+				// sky.rotation.y = Math.sin(clock.elapsedTime * displacementSpeed) * displacementAmount;
+				sky.rotation.y += 0.0001;
+				//sky.rotation.x += 0.0001;
+				//let angle = 0.1;
+				//directionalLight.position.x -= 0.01;
+				// directionalLight.position.z = 40*Math.cos(angle);
+				// angle +=0.11;
+				//directionalLight.position.x = Math.sin(clock.elapsedTime * displacementSpeed) * displacementAmount;
+				if (mixer) {
+					mixer.update(deltaTime);
+				}
+
+				updateCharacter(deltaTime);
+				
+				if (isFreeCameraMode) {
+					orbitControls.update();
+				}
+				
+				//stats.update();
+				composer.render();
+			}
+		</script>
+	</body>
+</html>
